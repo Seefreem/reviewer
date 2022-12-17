@@ -1,3 +1,4 @@
+import random
 from src.knowledgeObject import *
 from src.loadAndSave import *
 
@@ -8,53 +9,10 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QApplication)
 from PyQt5.QtWidgets import (QHBoxLayout, QVBoxLayout, QLineEdit)
 from PyQt5.QtWidgets import (QLabel, QFrame, QGridLayout, QTabWidget)
 from PyQt5.QtWidgets import (QPlainTextEdit, QMessageBox, QTextEdit)
+from PyQt5.QtWidgets import (QShortcut)
 
 
 
-# ''' test '''
-# body1 = {}
-# body1["context"] = "context 1"                # 文本信息
-# body1["HL"] = ['1']                     # 文本中的知识点
-# body1["PS"] = 1 
-
-# body2 = {}
-# body2["context"] = "context 2"                # 文本信息
-# body2["HL"] = ['2']                     # 文本中的知识点
-# body2["PS"] = 2
-
-# body3 = {}
-# body3["context"] = "context 3"                # 文本信息
-# body3["HL"] = ['3']                     # 文本中的知识点
-# body3["PS"] = 3 
-
-# KO1 = knowledgeObject(body = body1)
-# KO2 = knowledgeObject(body = body2)
-# KO3 = knowledgeObject(body = body3)
-
-# KOL = knowledgeObjectList()
-# KOL.objectList.append(KO1)
-# KOL.objectList.append(KO2)
-# KOL.objectList.append(KO3)
-# print("Original list")
-# KOL.PrintList()
-
-# KOL.sortList()
-# print("After sorting")
-# KOL.PrintList()
-
-
-# # save in file —— OK
-# SaveFile('./data/ko.json', KOL.objectList)
-
-
-# read from file —— OK
-# koList = LoadFile('./data/ko.json')
-# KOL = knowledgeObjectList()
-# for ite in koList:
-#     KOL.objectList.append(knowledgeObject(body = ite))
-
-# print("After loading")
-# KOL.PrintList()
 
 
 """class Row1():
@@ -82,12 +40,19 @@ class Row2():
         self.btChoose = QPushButton('选择')
         self.btListen = QPushButton('听写')
         self.btRead = QPushButton('朗读')
+        self.btSaveinFile = QPushButton('保存文件')
+        self.btSaveinFile.clicked.connect(self.SaveInFile)
 
         self.hbox2 = QHBoxLayout()
         self.hbox2.addWidget(self.btChoose)
         self.hbox2.addWidget(self.btListen)
         self.hbox2.addWidget(self.btRead)
+        self.hbox2.addWidget(self.btSaveinFile)
         self.hbox2.addStretch(1)
+
+    def SaveInFile(self):
+        SaveFile('./data/ko.json', self.root.kol.objectList)
+        pass
 
 class Row3():
     #------------------ 第三行
@@ -162,7 +127,7 @@ class Row4():
         # self.hbox4.addStretch(1)
 
     def pushActionFirst(self):
-        print("Right answer is " + str(self.rightAnswer))
+        # print("Right answer is " + str(self.rightAnswer))
         self.btFirst.setStyleSheet('')
         self.btSecond.setStyleSheet('')
         self.btThird.setStyleSheet('')
@@ -183,7 +148,7 @@ class Row4():
         self.btThird.setEnabled(False)
         
     def pushActionSecond(self):
-        print("Right answer is " + str(self.rightAnswer))
+        # print("Right answer is " + str(self.rightAnswer))
         self.btFirst.setStyleSheet('')
         self.btSecond.setStyleSheet('')
         self.btThird.setStyleSheet('')
@@ -204,7 +169,7 @@ class Row4():
         self.btThird.setEnabled(False)
 
     def pushActionThird(self):
-        print("Right answer is " + str(self.rightAnswer))
+        # print("Right answer is " + str(self.rightAnswer))
         self.btFirst.setStyleSheet('')
         self.btSecond.setStyleSheet('')
         self.btThird.setStyleSheet('')
@@ -245,16 +210,19 @@ class Row6():
     def __init__(self, root):
         self.root = root
         self.btRewnew = QPushButton('重排')
+        self.btShuffle = QPushButton('随机')
         self.btNext = QPushButton('下一题')
         self.btPrior = QPushButton('上一题')
         self.progressLable = QLabel("0/0")
         self.btRewnew.clicked.connect(self.reSort)
+        self.btShuffle.clicked.connect(self.Shuffle)
         self.btNext.clicked.connect(self.nextKo)
         self.btPrior.clicked.connect(self.PriorKo) 
 
         self.hbox6 = QHBoxLayout()
         # hbox.addStretch(1) # 空白填充，拉伸因子， 参数是QSpacerItem ，其实就是多个Stretch的时候的比例
         self.hbox6.addWidget(self.btRewnew)
+        self.hbox6.addWidget(self.btShuffle)
         self.hbox6.addStretch(1)
         self.hbox6.addWidget(self.btPrior)
         self.hbox6.addWidget(self.progressLable)
@@ -274,6 +242,10 @@ class Row6():
         # 刷新界面
         if self.root.reviewIndex - 1 >= 0:
             self.root.GoToPageX(self.root.reviewIndex)
+
+    def Shuffle(self):
+        random.shuffle(self.root.kol.objectList)
+        self.root.GoToPageX(1)
 
 
 #------------------默认界面
@@ -409,6 +381,17 @@ class AddOrEdit():
         koBody["moreInfo"] = root.addoredit.lineEditmoreInfo.toPlainText().split(";")
         print(str(koBody["moreInfo"]))
         print("Added !")
+
+        self.lineEditcontext.setPlainText("")
+        self.lineEditHL.setText("")
+        self.lineEditk.setText("")
+        self.lineEdittags.setText("")
+        self.lineEditaudioPath.setText("")
+        self.lineEditvideoPath.setText("")
+        self.lineEditimagePath.setText("")
+        self.lineEditcontextExplanation.setPlainText("")
+        self.lineEditmoreInfo.setPlainText("")
+
         self.lableKoNumber2.setText(str(len(root.kol.objectList)))
         
 class Example(QWidget):
@@ -419,14 +402,25 @@ class Example(QWidget):
         for ite in koList:
             self.kol.objectList.append(knowledgeObject(body = ite))
         self.Init_UI()
-        print("12312312")
-        self.kol.PrintList()
+        # self.kol.PrintList()
         
         # 准备数据
         self.reviewIndex = 0;
         self.correctNumber = -1;
         self.kol.sortList();
         self.GoToPageX(1)
+
+        # 注册快捷键
+        QShortcut(QtGui.QKeySequence(self.tr("Ctrl+D")), self, self.NextPage)
+        QShortcut(QtGui.QKeySequence(self.tr("Ctrl+A")), self, self.PriorPage)
+
+    def NextPage(self):
+        if self.reviewIndex + 1< len(self.kol.objectList):
+            self.GoToPageX(self.reviewIndex + 2)
+    
+    def PriorPage(self):
+        if self.reviewIndex - 1 >= 0:
+            self.GoToPageX(self.reviewIndex)
     
     # 根据当前的 self.reviewIndex 自动显示在界面上
     def refreshDefaultTab(self):
@@ -435,10 +429,8 @@ class Example(QWidget):
         correct = self.kol.objectList[self.reviewIndex].body["CT"]
         mode    = self.kol.mode
         reviewHl = self.kol.objectList[self.reviewIndex].body["HL"]
-        print("reviewHl " + ''.join(reviewHl))
         contextWithBlank = context
         for ite in reviewHl:
-            print("ite " + str(ite))
             contextWithBlank = contextWithBlank.replace(ite, '___')
         self.defaultPanel.row3.lableContext.setPlainText(contextWithBlank)
         self.defaultPanel.row3.lableCorect.setText('CT:' + str(correct[mode]))
@@ -458,7 +450,7 @@ class Example(QWidget):
         print("listLen " + str(listLen))
         print("answerList" + str(answerList))
         print("self.reviewIndex " + str(self.reviewIndex))
-        self.kol.PrintList()
+        # self.kol.PrintList()
         # 记录哪一个按钮是正确答案
         for i in range(len(answerList)):
             if self.reviewIndex == answerList[i] :
@@ -541,10 +533,10 @@ class Example(QWidget):
         self.show()
     def closeEvent(self, event):
         # 弹窗
-        # result = QMessageBox.information(self,'提示','是否保存？', QMessageBox.Ok | QMessageBox.Close, QMessageBox.Close)
-        # if QMessageBox.Ok == result:
-        #     SaveFile('./data/ko.json', self.kol.objectList)
-        SaveFile('./data/ko.json', self.kol.objectList)
+        result = QMessageBox.information(self,'提示','是否保存？', QMessageBox.Ok | QMessageBox.Close, QMessageBox.Close)
+        if QMessageBox.Ok == result:
+            SaveFile('./data/ko.json', self.kol.objectList)
+        # SaveFile('./data/ko.json', self.kol.objectList)
     def add(self):
         print("clicked tab3")
     def show_panel(self):

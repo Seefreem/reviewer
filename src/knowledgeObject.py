@@ -63,11 +63,9 @@ class knowledgeObjectList:
         for ite in self.objectList:
             ite.UpdatePS(mode = self.mode)
         self.objectList.sort(key = self.compare, reverse = reverse)
-        self.PrintList()
 
     def PrintList (self):
         # str = ''
         for ite in self.objectList:
-        #     str+= ite.ToString() + '\n'
             print(ite.ToString())
 
