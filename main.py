@@ -1,6 +1,8 @@
 import random
+import os
 from src.knowledgeObject import *
 from src.loadAndSave import *
+from src.vocabularyFile import create_vocabulary, load_vocabulary
 
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget
@@ -9,7 +11,8 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QApplication)
 from PyQt5.QtWidgets import (QHBoxLayout, QVBoxLayout, QLineEdit)
 from PyQt5.QtWidgets import (QLabel, QFrame, QGridLayout, QTabWidget)
 from PyQt5.QtWidgets import (QPlainTextEdit, QMessageBox, QTextEdit)
-from PyQt5.QtWidgets import (QShortcut)
+from PyQt5.QtWidgets import (QShortcut, QDialog, QDialogButtonBox)
+from PyQt5.QtWidgets import (QFileDialog, QFormLayout)
 
 
 
@@ -51,8 +54,79 @@ class Row2():
         self.hbox2.addStretch(1)
 
     def SaveInFile(self):
-        SaveFile('./data/ko.json', self.root.kol.objectList)
-        pass
+        self.root.SaveCurrentVocabulary()
+
+
+class NewVocabularyDialog(QDialog):
+    """Collect the file and descriptive metadata for a new vocabulary book."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("新增单词本")
+
+        self.filePath = QLineEdit()
+        self.btBrowse = QPushButton("选择位置")
+        self.btBrowse.clicked.connect(self.choosePath)
+        fileLayout = QHBoxLayout()
+        fileLayout.addWidget(self.filePath)
+        fileLayout.addWidget(self.btBrowse)
+
+        self.titleEdit = QLineEdit()
+        self.descriptionEdit = QPlainTextEdit()
+        self.sourceLanguageEdit = QLineEdit("English")
+        self.targetLanguageEdit = QLineEdit("Chinese")
+        self.tagsEdit = QLineEdit()
+        self.tagsEdit.setPlaceholderText("多个标签用分号分隔")
+
+        form = QFormLayout()
+        form.addRow("文件", fileLayout)
+        form.addRow("名称", self.titleEdit)
+        form.addRow("描述", self.descriptionEdit)
+        form.addRow("源语言", self.sourceLanguageEdit)
+        form.addRow("目标语言", self.targetLanguageEdit)
+        form.addRow("标签", self.tagsEdit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Save).setText("创建")
+        buttons.accepted.connect(self.validateAndAccept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    def choosePath(self):
+        defaultDirectory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "新增单词本",
+            defaultDirectory,
+            "JSON 文件 (*.json)",
+        )
+        if path:
+            if not path.lower().endswith(".json"):
+                path += ".json"
+            self.filePath.setText(path)
+            if not self.titleEdit.text().strip():
+                self.titleEdit.setText(os.path.splitext(os.path.basename(path))[0])
+
+    def validateAndAccept(self):
+        path = self.filePath.text().strip()
+        if not path:
+            QMessageBox.warning(self, "无法创建", "请选择新单词本的保存位置。")
+            return
+        if os.path.basename(path).endswith(".meta.json"):
+            QMessageBox.warning(self, "无法创建", "文件名不能以 .meta.json 结尾。")
+            return
+        self.accept()
+
+    def values(self):
+        return self.filePath.text().strip(), {
+            "title": self.titleEdit.text().strip(),
+            "description": self.descriptionEdit.toPlainText().strip(),
+            "sourceLanguage": self.sourceLanguageEdit.text().strip(),
+            "targetLanguage": self.targetLanguageEdit.text().strip(),
+            "tags": self.tagsEdit.text(),
+        }
 
 class Row3():
     #------------------ 第三行
@@ -74,6 +148,7 @@ class Row3():
         self.btDelete = QPushButton('删除')
         self.btChange = QPushButton('修改')
         
+        self.btDelete.clicked.connect(self.Delete)
         self.btChange.clicked.connect(self.Edit) 
         self.grid3_2.addWidget(self.lableCorect, 0, 0)
         self.grid3_2.addWidget(self.lableReview, 1, 0)
@@ -83,6 +158,34 @@ class Row3():
         self.hbox3.addLayout(self.hbox3_1)
         # self.hbox3.addStretch(1)
         self.hbox3.addLayout(self.grid3_2)
+
+    def Delete(self):
+        root = self.root
+        if not root.kol.objectList:
+            return
+
+        index = root.reviewIndex
+        if index >= len(root.kol.objectList):
+            index = len(root.kol.objectList) - 1
+
+        del root.kol.objectList[index]
+
+        if not root.kol.objectList:
+            root.reviewIndex = 0
+            root.correctNumber = -1
+            if hasattr(root, "refreshDefaultTab"):
+                root.refreshDefaultTab()
+            if hasattr(root, "refreshVocabularyHeader"):
+                root.refreshVocabularyHeader()
+            return
+
+        if index >= len(root.kol.objectList):
+            index = len(root.kol.objectList) - 1
+
+        root.reviewIndex = index
+        root.GoToPageX(index + 1)
+        if hasattr(root, "refreshVocabularyHeader"):
+            root.refreshVocabularyHeader()
 
     def Edit(self):
         root = self.root
@@ -94,7 +197,10 @@ class Row3():
         root.addoredit.lineEditcontext.setPlainText(koBody["context"]) # 两种文本编辑器的设置是不一样的
         root.addoredit.lineEditHL.setText(";".join(koBody["HL"]))
         root.addoredit.lineEditk.setText(str(koBody["k"]))
-        root.addoredit.lineEdittags.setText(";".join(koBody["tags"]))
+        tags = koBody["tags"]
+        if isinstance(tags, dict):
+            tags = tags.keys()
+        root.addoredit.lineEdittags.setText(";".join(tags))
         root.addoredit.lineEditaudioPath.setText(koBody["audioPath"])
         root.addoredit.lineEditvideoPath.setText(koBody["videoPath"])
         root.addoredit.lineEditimagePath.setText(koBody["imagePath"])
@@ -229,6 +335,8 @@ class Row6():
         self.hbox6.addWidget(self.btNext)
 
     def reSort(self):
+        if not self.root.kol.objectList:
+            return
         self.root.kol.sortList();
         self.root.GoToPageX(1)
         pass
@@ -353,6 +461,7 @@ class AddOrEdit():
         print(str(koBody["moreInfo"]))
         print("Changed !")
         self.lableKoNumber2.setText(str(len(root.kol.objectList)))
+        root.refreshVocabularyHeader()
 
     def SaveAdded(self):
         root = self.root
@@ -393,12 +502,19 @@ class AddOrEdit():
         self.lineEditmoreInfo.setPlainText("")
 
         self.lableKoNumber2.setText(str(len(root.kol.objectList)))
+        if len(root.kol.objectList) == 1:
+            root.GoToPageX(1)
+        root.refreshVocabularyHeader()
         
 class Example(QWidget):
     def __init__(self):
         super().__init__()
+        projectDirectory = os.path.dirname(os.path.abspath(__file__))
+        self.currentVocabularyPath = os.path.join(projectDirectory, "data", "ko.json")
+        self.currentVocabularyMetadata = {}
         self.kol = knowledgeObjectList()
-        koList = LoadFile('./data/ko.json')
+        koList, self.currentVocabularyMetadata = load_vocabulary(self.currentVocabularyPath)
+        self.kol.objectList = []
         for ite in koList:
             self.kol.objectList.append(knowledgeObject(body = ite))
         self.Init_UI()
@@ -407,8 +523,12 @@ class Example(QWidget):
         # 准备数据
         self.reviewIndex = 0;
         self.correctNumber = -1;
-        self.kol.sortList();
-        self.GoToPageX(1)
+        if self.kol.objectList:
+            self.kol.sortList();
+            self.GoToPageX(1)
+        else:
+            self.refreshDefaultTab()
+        self.refreshVocabularyHeader()
 
         # 注册快捷键
         QShortcut(QtGui.QKeySequence(self.tr("Ctrl+D")), self, self.NextPage)
@@ -424,6 +544,30 @@ class Example(QWidget):
     
     # 根据当前的 self.reviewIndex 自动显示在界面上
     def refreshDefaultTab(self):
+        if not self.kol.objectList:
+            self.reviewIndex = 0
+            self.correctNumber = -1
+            self.defaultPanel.row3.lableContext.setPlainText(
+                "当前单词本为空。请在“新增/编辑”页面添加单词。"
+            )
+            self.defaultPanel.row3.lableCorect.setText("CT:0")
+            self.defaultPanel.row3.lableReview.setText("RT:0")
+            self.defaultPanel.row5.lableExplanation.setText("")
+            self.defaultPanel.row6.progressLable.setText("0/0")
+            self.defaultPanel.row6.btPrior.setEnabled(False)
+            self.defaultPanel.row6.btNext.setEnabled(False)
+            self.defaultPanel.row3.btDelete.setEnabled(False)
+            self.defaultPanel.row3.btChange.setEnabled(False)
+            for button in self.answerButtons():
+                button.setText("—")
+                button.setEnabled(False)
+                button.setStyleSheet("")
+            return
+
+        self.defaultPanel.row3.btDelete.setEnabled(True)
+        self.defaultPanel.row3.btChange.setEnabled(True)
+        if self.reviewIndex >= len(self.kol.objectList):
+            self.reviewIndex = len(self.kol.objectList) - 1
         context = self.kol.objectList[self.reviewIndex].body["context"]
         review  = self.kol.objectList[self.reviewIndex].body["RT"]
         correct = self.kol.objectList[self.reviewIndex].body["CT"]
@@ -437,16 +581,10 @@ class Example(QWidget):
         self.defaultPanel.row3.lableReview.setText('RT:' + str(review [mode]))
 
         listLen = len(self.kol.objectList)
-        currentTime = int(time.time())
-        random.seed (currentTime) 
+        otherIndexes = [index for index in range(listLen) if index != self.reviewIndex]
         answerList = [self.reviewIndex]
-        for i in range(0, 20):
-            ran = int(random.random() * listLen)
-            if self.reviewIndex != ran and ran < listLen:
-                answerList.append(ran)
-            if len(answerList) >=3:
-                break
-        answerList.sort(reverse = True)
+        answerList.extend(random.sample(otherIndexes, min(2, len(otherIndexes))))
+        random.shuffle(answerList)
         print("listLen " + str(listLen))
         print("answerList" + str(answerList))
         print("self.reviewIndex " + str(self.reviewIndex))
@@ -460,37 +598,35 @@ class Example(QWidget):
         # "".join(a)  >>> '12'
         # " ".join(a) >>> '1 2'
         # ",".join(a) >>> '1,2'
-        str1 = ",".join(self.kol.objectList[answerList[0]].body["HL"])
-        str2 = ",".join(self.kol.objectList[answerList[1]].body["HL"])
-        str3 = ",".join(self.kol.objectList[answerList[2]].body["HL"])
-
-        self.defaultPanel.row4.btFirst.setText(str1)
-        self.defaultPanel.row4.btSecond.setText(str2)
-        self.defaultPanel.row4.btThird.setText(str3)
-
-        self.defaultPanel.row4.btFirst.setEnabled(True)
-        self.defaultPanel.row4.btFirst.setStyleSheet('')
-        self.defaultPanel.row4.btSecond.setEnabled(True)
-        self.defaultPanel.row4.btSecond.setStyleSheet('')
-        self.defaultPanel.row4.btThird.setEnabled(True)
-        self.defaultPanel.row4.btThird.setStyleSheet('')
+        for position, button in enumerate(self.answerButtons()):
+            button.setStyleSheet("")
+            if position < len(answerList):
+                answer = self.kol.objectList[answerList[position]].body["HL"]
+                button.setText(",".join(answer))
+                button.setEnabled(True)
+            else:
+                button.setText("—")
+                button.setEnabled(False)
 
         self.defaultPanel.row5.lableExplanation.setText("")
         self.defaultPanel.row6.progressLable.setText(str(self.reviewIndex + 1) + '/' + str(listLen))
-        if self.reviewIndex > 0 and self.reviewIndex < listLen - 1:
-            self.defaultPanel.row6.btPrior.setEnabled(True)
-            self.defaultPanel.row6.btNext.setEnabled(True)
-        elif self.reviewIndex <= 0:
-            self.defaultPanel.row6.btPrior.setEnabled(False)
-            self.defaultPanel.row6.btNext.setEnabled(True)
-        else:
-            self.defaultPanel.row6.btPrior.setEnabled(True)
-            self.defaultPanel.row6.btNext.setEnabled(False)
+        self.defaultPanel.row6.btPrior.setEnabled(self.reviewIndex > 0)
+        self.defaultPanel.row6.btNext.setEnabled(self.reviewIndex < listLen - 1)
 
     def GoToPageX(self, pageNumber):
+        if not self.kol.objectList:
+            self.refreshDefaultTab()
+            return
         self.reviewIndex = pageNumber - 1;
         self.correctNumber = -1;
         self.refreshDefaultTab()
+
+    def answerButtons(self):
+        return [
+            self.defaultPanel.row4.btFirst,
+            self.defaultPanel.row4.btSecond,
+            self.defaultPanel.row4.btThird,
+        ]
         
     def Init_UI(self):
         self.setGeometry(300,300,1000,700) # 初始窗口大小
@@ -498,6 +634,17 @@ class Example(QWidget):
 
         self.defaultPanel = DefaultPanel(root = self);
         self.addoredit = AddOrEdit(root = self)
+        self.btNewVocabulary = QPushButton("新增单词本")
+        self.btSelectVocabulary = QPushButton("选择单词表")
+        self.btNewVocabulary.clicked.connect(self.NewVocabulary)
+        self.btSelectVocabulary.clicked.connect(self.SelectVocabulary)
+        self.vocabularyLabel = QLabel("")
+        self.vocabularyLabel.setToolTip("当前单词表及其元数据")
+        self.vocabularyLayout = QHBoxLayout()
+        self.vocabularyLayout.addWidget(self.btNewVocabulary)
+        self.vocabularyLayout.addWidget(self.btSelectVocabulary)
+        self.vocabularyLayout.addWidget(self.vocabularyLabel)
+        self.vocabularyLayout.addStretch(1)
         # Initialize tab screen
         self.tabs = QTabWidget()
         self.tab1 = QWidget()
@@ -528,14 +675,131 @@ class Example(QWidget):
         
         # Add tabs to widget
         self.layout = QVBoxLayout(self)
+        self.layout.addLayout(self.vocabularyLayout)
         self.layout.addWidget(self.tabs)
         self.setLayout(self.layout) # 将布局填充到窗体中
         self.show()
+
+    def refreshVocabularyHeader(self):
+        title = self.currentVocabularyMetadata.get("title")
+        if not title:
+            title = os.path.splitext(os.path.basename(self.currentVocabularyPath))[0]
+        fileName = os.path.basename(self.currentVocabularyPath)
+        self.vocabularyLabel.setText(
+            "当前单词本：{}（{}，{} 个词条）".format(
+                title,
+                fileName,
+                len(self.kol.objectList),
+            )
+        )
+        description = self.currentVocabularyMetadata.get("description", "")
+        source = self.currentVocabularyMetadata.get("sourceLanguage", "")
+        target = self.currentVocabularyMetadata.get("targetLanguage", "")
+        tags = self.currentVocabularyMetadata.get("tags", [])
+        if isinstance(tags, list):
+            tags = "、".join(tags)
+        self.vocabularyLabel.setToolTip(
+            "路径：{}\n描述：{}\n语言：{} → {}\n标签：{}".format(
+                self.currentVocabularyPath,
+                description,
+                source,
+                target,
+                tags,
+            )
+        )
+        self.setWindowTitle("EnglishReviewer - " + title)
+        self.addoredit.lableKoNumber2.setText(str(len(self.kol.objectList)))
+
+    def SaveCurrentVocabulary(self, showMessage=True):
+        try:
+            SaveFile(self.currentVocabularyPath, self.kol.objectList)
+        except Exception as error:
+            QMessageBox.critical(self, "保存失败", str(error))
+            return False
+        if showMessage:
+            QMessageBox.information(
+                self,
+                "保存成功",
+                "已保存到：\n" + self.currentVocabularyPath,
+            )
+        return True
+
+    def confirmVocabularySwitch(self):
+        result = QMessageBox.question(
+            self,
+            "切换单词本",
+            "切换后，当前未保存的修改会丢失。是否先保存当前单词本？",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save,
+        )
+        if result == QMessageBox.Cancel:
+            return False
+        if result == QMessageBox.Save:
+            return self.SaveCurrentVocabulary(showMessage=False)
+        return True
+
+    def NewVocabulary(self):
+        dialog = NewVocabularyDialog(self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        if not self.confirmVocabularySwitch():
+            return
+        path, metadata = dialog.values()
+        try:
+            createdPath, createdMetadata = create_vocabulary(path, metadata)
+        except Exception as error:
+            QMessageBox.critical(self, "创建失败", str(error))
+            return
+        self.loadVocabulary(createdPath, createdMetadata)
+        self.tabs.setCurrentIndex(2)
+        QMessageBox.information(
+            self,
+            "创建成功",
+            "新单词本已创建。请在“新增/编辑”页面添加第一个词条。",
+        )
+
+    def SelectVocabulary(self):
+        initialDirectory = os.path.dirname(self.currentVocabularyPath)
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择单词表",
+            initialDirectory,
+            "JSON 文件 (*.json)",
+        )
+        if not path:
+            return
+        if path.endswith(".meta.json"):
+            QMessageBox.warning(self, "无法打开", "请选择单词表 JSON，而不是元数据文件。")
+            return
+        try:
+            objects, metadata = load_vocabulary(path)
+        except Exception as error:
+            QMessageBox.critical(self, "打开失败", str(error))
+            return
+        if not self.confirmVocabularySwitch():
+            return
+        self.loadVocabulary(path, metadata, objects)
+
+    def loadVocabulary(self, path, metadata=None, objects=None):
+        if objects is None:
+            objects, loadedMetadata = load_vocabulary(path)
+            if metadata is None:
+                metadata = loadedMetadata
+        self.currentVocabularyPath = os.path.abspath(path)
+        self.currentVocabularyMetadata = metadata or {}
+        self.kol.objectList = [knowledgeObject(body=body) for body in objects]
+        self.reviewIndex = 0
+        self.correctNumber = -1
+        if self.kol.objectList:
+            self.kol.sortList()
+        self.refreshDefaultTab()
+        self.refreshVocabularyHeader()
+
     def closeEvent(self, event):
         # 弹窗
         result = QMessageBox.information(self,'提示','是否保存？', QMessageBox.Ok | QMessageBox.Close, QMessageBox.Close)
         if QMessageBox.Ok == result:
-            SaveFile('./data/ko.json', self.kol.objectList)
+            self.SaveCurrentVocabulary(showMessage=False)
         # SaveFile('./data/ko.json', self.kol.objectList)
     def add(self):
         print("clicked tab3")
@@ -546,6 +810,3 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
     app.exit(app.exec_())
-
-
-

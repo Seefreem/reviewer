@@ -6,7 +6,7 @@ def LoadFile (fileName):
     return data 是以list形式存放的KO，每个ko是一个字典对象
     """
     data = []
-    with open(fileName, 'r') as f:
+    with open(fileName, 'r', encoding='utf-8') as f:
         data = json.load(f)
     return data
 
@@ -18,6 +18,5 @@ def SaveFile (fileName, data):
     koList = []
     for ite in data:
         koList.append(ite.body)
-    with open(fileName, 'w') as f:
-        json.dump(koList, f)
- 
+    with open(fileName, 'w', encoding='utf-8') as f:
+        json.dump(koList, f, ensure_ascii=False)
